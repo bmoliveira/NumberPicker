@@ -43,6 +43,7 @@ public class ValuePicker extends FrameLayout {
     private boolean mIsDividerVisible;
     private View mTopDivider;
     private View mBottomDivider;
+    private int mNumberOfTopPaddingItems = 2;
 
     public ValuePicker(Context context) {
         this(context, null);
@@ -87,8 +88,8 @@ public class ValuePicker extends FrameLayout {
         viewRefresh();
 
         addView(mRecyclerView);
-        addView(mBottomDivider);
         addView(mTopDivider);
+        addView(mBottomDivider);
     }
 
     private void setupViewSize() {
@@ -97,7 +98,7 @@ public class ValuePicker extends FrameLayout {
         mItemSmallHeight = getTextViewHeight(context, false, mTextSize, mTextSize);
         mItemBigHeight = getTextViewHeight(context, true, mTextSizeSelected, mTextSizeSelected);
         int listHeight = (mItemSmallHeight * (mNumberVisibleItems - 1)) + mItemBigHeight;
-        mRecyclerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
+        mRecyclerView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
 
         int dividerMargin = listHeight - (mItemBigHeight/2);
         int dividerVisibility = mIsDividerVisible ? View.VISIBLE : View.GONE;
@@ -114,6 +115,8 @@ public class ValuePicker extends FrameLayout {
 
     private void setupRecyclerView() {
         Context context = mRecyclerView.getContext();
+
+        mNumberOfTopPaddingItems = (mNumberVisibleItems - 1) / 2;
 
         LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
         mRecyclerView.setLayoutManager(linearLayoutManager);
@@ -257,9 +260,9 @@ public class ValuePicker extends FrameLayout {
         number.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         number.setGravity(Gravity.CENTER_HORIZONTAL);
         if (isBig) {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSelected);
+            number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textSizeSelected);
         } else {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize);
+            number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textSize);
         }
 
         return number;
@@ -305,7 +308,7 @@ public class ValuePicker extends FrameLayout {
                 return new ItemHolder(number);
             } else {
                 View paddingView = new View(mContext);
-                RecyclerView.LayoutParams layoutParams = new RecyclerView.LayoutParams(dp2px(mContext, 1), (int) mItemSmallHeight);
+                RecyclerView.LayoutParams layoutParams = new RecyclerView.LayoutParams(dp2px(mContext, 1), mItemSmallHeight);
                 paddingView.setLayoutParams(layoutParams);
                 return new PaddingHolder(paddingView);
             }
@@ -318,14 +321,14 @@ public class ValuePicker extends FrameLayout {
                 PaddingHolder paddingHolder = (PaddingHolder) holder;
                 ViewGroup.LayoutParams params = paddingHolder.itemView.getLayoutParams();
                 if (position != 0) {
-                    params.height = (int) (mItemSmallHeight + mItemBigHeight - mItemSmallHeight);
+                    params.height = (mItemSmallHeight + mItemBigHeight - mItemSmallHeight);
                 } else {
-                    params.height = (int) mItemSmallHeight;
+                    params.height = mItemSmallHeight;
                 }
             }
             if (holder instanceof ItemHolder) {
                 final ItemHolder itemHolder = (ItemHolder) holder;
-                int adjustedPosition = position - 1; // Adjusted position removes the 1st padding
+                int adjustedPosition = position - mNumberOfTopPaddingItems; // Adjusted position removes the 1st padding
 
                 itemHolder.number.setText(values.get(adjustedPosition)); //minus padding view
 
@@ -350,24 +353,24 @@ public class ValuePicker extends FrameLayout {
                         textSizeAnimation.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                             @Override
                             public void onAnimationUpdate(ValueAnimator animator) {
-                                itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, (Float) animator.getAnimatedValue());
+                                itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (Float) animator.getAnimatedValue());
                             }
                         });
                         textSizeAnimation.start();
                     } else {
-                        itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSelected);
+                        itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mTextSizeSelected);
                     }
 
                 } else {
                     itemHolder.number.setTextColor(mTextColor);
-                    itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSize);
+                    itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mTextSize);
                 }
             }
         }
 
         @Override
         public int getItemViewType(int position) {
-            if (position == 0 || position == getItemCount() - 1) {
+            if (position < mNumberOfTopPaddingItems || position >= getItemCount() - mNumberOfTopPaddingItems) {
                 return VIEW_TYPE_PADDING;
             }
             return VIEW_TYPE_ITEM;
@@ -378,7 +381,7 @@ public class ValuePicker extends FrameLayout {
                 setSelectedIndex(POSITION_NONE);
                 return;
             }
-            setSelectedIndex(absoluteIndex - 1); // Adjust to position index
+            setSelectedIndex(absoluteIndex - mNumberOfTopPaddingItems); // Adjust to position index
         }
 
         void setSelectedIndex(int selectedIndex) {
@@ -401,7 +404,7 @@ public class ValuePicker extends FrameLayout {
 
         @Override
         public int getItemCount() {
-            return values.size() + 2; // calculate number of items plus 2 padding
+            return values.size() + mNumberOfTopPaddingItems*2; // calculate number of items plus 2 padding
         }
 
         private class PaddingHolder extends Holder {
