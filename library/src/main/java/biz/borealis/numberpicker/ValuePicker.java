@@ -15,16 +15,16 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.LinkedList;
 import java.util.List;
 
-public class ValuePicker extends LinearLayout {
-
-    private float mItemBigHeight;
-    private float mItemSmallHeight;
+public class ValuePicker extends FrameLayout {
+    private int mItemBigHeight;
+    private int mItemSmallHeight;
     private int mAllVerticalScroll;
     private int mMin;
     private int mMax;
@@ -34,8 +34,15 @@ public class ValuePicker extends LinearLayout {
     private float mTextSizeSelected;
     private int mTextColor;
     private int mTextColorSelected;
+    private int mNumberVisibleItems;
     private boolean mAnimateTextSize, mTextFadeColor;
     private OnValueChangeListener mOnValueChangeListener;
+
+    private int mDividerHeight;
+    private int mDividerColor;
+    private boolean mIsDividerVisible;
+    private View mTopDivider;
+    private View mBottomDivider;
 
     public ValuePicker(Context context) {
         this(context, null);
@@ -53,28 +60,64 @@ public class ValuePicker extends LinearLayout {
         Resources resources = context.getResources();
         mMin = a.getInt(R.styleable.np_ValuePicker_np_min_number, resources.getInteger(R.integer.np_def_min));
         mMax = a.getInt(R.styleable.np_ValuePicker_np_max_number, resources.getInteger(R.integer.np_def_max));
+        mNumberVisibleItems = Math.max(1, a.getInt(R.styleable.np_ValuePicker_np_number_visible_items, resources.getInteger(R.integer.np_def_visible_items)));
+
         mTextColor = a.getColor(R.styleable.np_ValuePicker_np_text_color, ContextCompat.getColor(context, R.color.np_text_color));
         mTextSize = a.getDimension(R.styleable.np_ValuePicker_np_text_size, resources.getDimension(R.dimen.np_text_size));
-        mTextColorSelected = a.getColor(R.styleable.np_ValuePicker_np_text_color, ContextCompat.getColor(context, R.color.np_text_color_selected));
-        mTextSizeSelected = a.getDimension(R.styleable.np_ValuePicker_np_text_size, resources.getDimension(R.dimen.np_text_size_selected));
+
+        mTextColorSelected = a.getColor(R.styleable.np_ValuePicker_np_text_color_selected, ContextCompat.getColor(context, R.color.np_text_color_selected));
+        mTextSizeSelected = a.getDimension(R.styleable.np_ValuePicker_np_text_size_selected, resources.getDimension(R.dimen.np_text_size_selected));
+
         mTextFadeColor = a.getBoolean(R.styleable.np_ValuePicker_np_fade_text_color, resources.getBoolean(R.bool.np_def_fade_color));
         mAnimateTextSize = a.getBoolean(R.styleable.np_ValuePicker_np_animate_text_size, resources.getBoolean(R.bool.np_def_animate_text_size));
+        mIsDividerVisible = a.getBoolean(R.styleable.np_ValuePicker_np_divider_visible, resources.getBoolean(R.bool.np_def_divider_visible));
+        mDividerColor = a.getColor(R.styleable.np_ValuePicker_np_divider_color, ContextCompat.getColor(context, R.color.np_def_divider_color));
+        mDividerHeight = a.getInt(R.styleable.np_ValuePicker_np_divider_height_px, resources.getInteger(R.integer.np_def_divider_height));
 
         a.recycle();
 
         setMinimumWidth(context.getResources().getDimensionPixelSize(R.dimen.np_min_width));
 
-        mItemSmallHeight = getTextViewHeight(context, false, mTextSize, mTextSizeSelected);
-        mItemBigHeight = getTextViewHeight(context, true, mTextSize, mTextSizeSelected);
-
         mRecyclerView = new RecyclerView(context);
-        int listHeight = (int) (mItemSmallHeight * 2 + mItemBigHeight);
+        setupRecyclerView();
+
+        mTopDivider = new View(context);
+        mBottomDivider = new View(context);
+
+        viewRefresh();
+
+        addView(mRecyclerView);
+        addView(mBottomDivider);
+        addView(mTopDivider);
+    }
+
+    private void setupViewSize() {
+        Context context = mRecyclerView.getContext();
+
+        mItemSmallHeight = getTextViewHeight(context, false, mTextSize, mTextSize);
+        mItemBigHeight = getTextViewHeight(context, true, mTextSizeSelected, mTextSizeSelected);
+        int listHeight = (mItemSmallHeight * (mNumberVisibleItems - 1)) + mItemBigHeight;
         mRecyclerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
+
+        int dividerMargin = listHeight - (mItemBigHeight/2);
+        int dividerVisibility = mIsDividerVisible ? View.VISIBLE : View.GONE;
+
+        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, mDividerHeight);
+        topParams.setMargins(0, dividerMargin, 0, 0);
+        mTopDivider.setLayoutParams(topParams);
+        mTopDivider.setVisibility(dividerVisibility);
+
+        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, mDividerHeight);
+        bottomParams.setMargins(0, 0, 0, dividerMargin);
+        mBottomDivider.setVisibility(dividerVisibility);
+    }
+
+    private void setupRecyclerView() {
+        Context context = mRecyclerView.getContext();
+
         LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
         mRecyclerView.setLayoutManager(linearLayoutManager);
-
         mAllVerticalScroll = 0;
-
         final LinearLayoutManager dateLayoutManager = new LinearLayoutManager(context);
         dateLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
         mRecyclerView.setLayoutManager(dateLayoutManager);
@@ -92,7 +135,6 @@ public class ValuePicker extends LinearLayout {
                     }
                 }
             }
-
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
@@ -102,7 +144,13 @@ public class ValuePicker extends LinearLayout {
         mValuePickerAdapter = new ValuePickerAdapter(context, getMin(), getMax());
         mRecyclerView.setAdapter(mValuePickerAdapter);
         mValuePickerAdapter.setSelectedIndex(0);
-        addView(mRecyclerView);
+    }
+
+    private void viewRefresh() {
+        mBottomDivider.setBackgroundColor(mDividerColor);
+        mTopDivider.setBackgroundColor(mDividerColor);
+        setupViewSize();
+        mValuePickerAdapter.notifyDataSetChanged();
     }
 
     public OnValueChangeListener getOnValueChangeListener() {
@@ -141,6 +189,7 @@ public class ValuePicker extends LinearLayout {
 
     public void setTextSize(float mTextSize) {
         this.mTextSize = mTextSize;
+        viewRefresh();
     }
 
     public float getTextSizeSelected() {
@@ -149,6 +198,7 @@ public class ValuePicker extends LinearLayout {
 
     public void setTextSizeSelected(float mTextSizeSelected) {
         this.mTextSizeSelected = mTextSizeSelected;
+        viewRefresh();
     }
 
     public int getTextColor() {
@@ -157,6 +207,7 @@ public class ValuePicker extends LinearLayout {
 
     public void setTextColor(int mTextColor) {
         this.mTextColor = mTextColor;
+        viewRefresh();
     }
 
     public int getTextColorSelected() {
@@ -165,10 +216,15 @@ public class ValuePicker extends LinearLayout {
 
     public void setTextColorSelected(int mTextColorSelected) {
         this.mTextColorSelected = mTextColorSelected;
+        viewRefresh();
     }
 
     public String getSelectedValue() {
-        return mValuePickerAdapter.getSelectedNumber();
+        return mValuePickerAdapter.getSelectedValue();
+    }
+
+    public int getSelectedIndex() {
+        return mValuePickerAdapter.selectedItemIndex;
     }
 
     private void calculatePositionAndScroll() {
@@ -201,9 +257,9 @@ public class ValuePicker extends LinearLayout {
         number.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         number.setGravity(Gravity.CENTER_HORIZONTAL);
         if (isBig) {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSizeSelected);
+            number.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSelected);
         } else {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize);
+            number.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize);
         }
 
         return number;
@@ -275,7 +331,7 @@ public class ValuePicker extends LinearLayout {
 
                 if (adjustedPosition == selectedItemIndex) {
                     if (mTextFadeColor) {
-                        final ValueAnimator colorAnimation = ValueAnimator.ofObject(new ArgbEvaluator(), itemHolder.number.getCurrentTextColor(), ContextCompat.getColor(mContext, R.color.np_text_color_selected));
+                        final ValueAnimator colorAnimation = ValueAnimator.ofObject(new ArgbEvaluator(), itemHolder.number.getCurrentTextColor(), mTextColorSelected);
                         colorAnimation.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
 
                             @Override
@@ -285,21 +341,26 @@ public class ValuePicker extends LinearLayout {
 
                         });
                         colorAnimation.start();
+                    } else {
+                        itemHolder.number.setTextColor(mTextColorSelected);
                     }
+
                     if (mAnimateTextSize) {
                         ValueAnimator textSizeAnimation = ValueAnimator.ofObject(new FloatEvaluator(), mTextSize, mTextSizeSelected);
                         textSizeAnimation.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                             @Override
                             public void onAnimationUpdate(ValueAnimator animator) {
-                                itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_PX, (Float) animator.getAnimatedValue());
+                                itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, (Float) animator.getAnimatedValue());
                             }
                         });
                         textSizeAnimation.start();
+                    } else {
+                        itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSizeSelected);
                     }
 
                 } else {
-                    itemHolder.number.setTextColor(ContextCompat.getColor(mContext, R.color.np_text_color));
-                    itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_PX, mTextSize);
+                    itemHolder.number.setTextColor(mTextColor);
+                    itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_SP, mTextSize);
                 }
             }
         }
@@ -331,7 +392,7 @@ public class ValuePicker extends LinearLayout {
 
         }
 
-        String getSelectedNumber() {
+        String getSelectedValue() {
             if (selectedItemIndex == POSITION_NONE) {
                 return "";
             }
@@ -344,10 +405,8 @@ public class ValuePicker extends LinearLayout {
         }
 
         private class PaddingHolder extends Holder {
-
             private PaddingHolder(View itemView) {
                 super(itemView);
-
             }
         }
 

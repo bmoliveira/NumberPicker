@@ -3,11 +3,15 @@
         <attr name="np_background" format="string" />
         <attr name="np_min_number" format="integer"/>
         <attr name="np_max_number" format="integer"/>
+        <attr name="np_divider_height_px" format="integer"/>
+        <attr name="np_number_visible_items" format="integer"/>
         <attr name="np_text_size_selected" format="dimension" />
         <attr name="np_text_size" format="dimension" />
         <attr name="np_text_color_selected" format="color" />
         <attr name="np_text_color" format="color" />
+        <attr name="np_divider_color" format="color" />
         <attr name="np_fade_text_color" format="boolean" />
         <attr name="np_animate_text_size" format="boolean" />
+        <attr name="np_divider_visible" format="boolean" />
     </declare-styleable>
 </resources>

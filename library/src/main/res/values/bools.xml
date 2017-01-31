@@ -2,4 +2,5 @@
 <resources>
     <bool name="np_def_fade_color">true</bool>
     <bool name="np_def_animate_text_size">true</bool>
+    <bool name="np_def_divider_visible">true</bool>
 </resources>
