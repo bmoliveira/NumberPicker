@@ -6,6 +6,8 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.graphics.Typeface;
+import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.LinearLayoutManager;
@@ -15,35 +17,31 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.LinkedList;
 import java.util.List;
 
-public class ValuePicker extends FrameLayout {
+public class ValuePicker extends LinearLayout {
     private int mItemBigHeight;
     private int mItemSmallHeight;
-    private int mAllVerticalScroll;
     private int mMin;
     private int mMax;
     private final RecyclerView mRecyclerView;
     private ValuePickerAdapter mValuePickerAdapter;
-    private float mTextSize;
-    private float mTextSizeSelected;
+
+    private float mAllVerticalScroll;
+    private int mTextSizePx;
+    private int mTextSizeSelectedPx;
+
     private int mTextColor;
     private int mTextColorSelected;
     private int mNumberVisibleItems;
     private boolean mAnimateTextSize, mTextFadeColor;
+
     private OnValueChangeListener mOnValueChangeListener;
 
-    private int mDividerHeight;
-    private int mDividerColor;
-    private boolean mIsDividerVisible;
-    private View mTopDivider;
-    private View mBottomDivider;
-    private int mNumberOfTopPaddingItems = 2;
 
     public ValuePicker(Context context) {
         this(context, null);
@@ -61,19 +59,17 @@ public class ValuePicker extends FrameLayout {
         Resources resources = context.getResources();
         mMin = a.getInt(R.styleable.np_ValuePicker_np_min_number, resources.getInteger(R.integer.np_def_min));
         mMax = a.getInt(R.styleable.np_ValuePicker_np_max_number, resources.getInteger(R.integer.np_def_max));
+
         mNumberVisibleItems = Math.max(1, a.getInt(R.styleable.np_ValuePicker_np_number_visible_items, resources.getInteger(R.integer.np_def_visible_items)));
 
         mTextColor = a.getColor(R.styleable.np_ValuePicker_np_text_color, ContextCompat.getColor(context, R.color.np_text_color));
-        mTextSize = a.getDimension(R.styleable.np_ValuePicker_np_text_size, resources.getDimension(R.dimen.np_text_size));
+        mTextSizePx = a.getDimensionPixelSize(R.styleable.np_ValuePicker_np_text_size, resources.getDimensionPixelSize(R.dimen.np_text_size));
 
         mTextColorSelected = a.getColor(R.styleable.np_ValuePicker_np_text_color_selected, ContextCompat.getColor(context, R.color.np_text_color_selected));
-        mTextSizeSelected = a.getDimension(R.styleable.np_ValuePicker_np_text_size_selected, resources.getDimension(R.dimen.np_text_size_selected));
+        mTextSizeSelectedPx = a.getDimensionPixelSize(R.styleable.np_ValuePicker_np_text_size_selected, resources.getDimensionPixelSize(R.dimen.np_text_size_selected));
 
         mTextFadeColor = a.getBoolean(R.styleable.np_ValuePicker_np_fade_text_color, resources.getBoolean(R.bool.np_def_fade_color));
         mAnimateTextSize = a.getBoolean(R.styleable.np_ValuePicker_np_animate_text_size, resources.getBoolean(R.bool.np_def_animate_text_size));
-        mIsDividerVisible = a.getBoolean(R.styleable.np_ValuePicker_np_divider_visible, resources.getBoolean(R.bool.np_def_divider_visible));
-        mDividerColor = a.getColor(R.styleable.np_ValuePicker_np_divider_color, ContextCompat.getColor(context, R.color.np_def_divider_color));
-        mDividerHeight = a.getInt(R.styleable.np_ValuePicker_np_divider_height_px, resources.getInteger(R.integer.np_def_divider_height));
 
         a.recycle();
 
@@ -82,92 +78,119 @@ public class ValuePicker extends FrameLayout {
         mRecyclerView = new RecyclerView(context);
         setupRecyclerView();
 
-        mTopDivider = new View(context);
-        mBottomDivider = new View(context);
-
+        setupViewSize();
         viewRefresh();
 
-        addView(mRecyclerView);
-        addView(mTopDivider);
-        addView(mBottomDivider);
+        addView(mRecyclerView, recyclerViewLayoutParams());
     }
 
+
+    //
+    // Update views state
     private void setupViewSize() {
-        Context context = mRecyclerView.getContext();
-
-        mItemSmallHeight = getTextViewHeight(context, false, mTextSize, mTextSize);
-        mItemBigHeight = getTextViewHeight(context, true, mTextSizeSelected, mTextSizeSelected);
-        int listHeight = (mItemSmallHeight * (mNumberVisibleItems - 1)) + mItemBigHeight;
-        mRecyclerView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, listHeight));
-
-        int dividerMargin = listHeight - (mItemBigHeight/2);
-        int dividerVisibility = mIsDividerVisible ? View.VISIBLE : View.GONE;
-
-        FrameLayout.LayoutParams topParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, mDividerHeight);
-        topParams.setMargins(0, dividerMargin, 0, 0);
-        mTopDivider.setLayoutParams(topParams);
-        mTopDivider.setVisibility(dividerVisibility);
-
-        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, mDividerHeight);
-        bottomParams.setMargins(0, 0, 0, dividerMargin);
-        mBottomDivider.setVisibility(dividerVisibility);
+        mItemSmallHeight = ValuePickerHelper.getTextViewHeight(getContext(), false, mTextSizePx, mTextSizeSelectedPx);
+        mItemBigHeight = ValuePickerHelper.getTextViewHeight(getContext(), true, mTextSizePx, mTextSizeSelectedPx);
     }
 
+    private void viewRefresh() {
+        setupViewSize();
+        mValuePickerAdapter.notifyDataSetChanged();
+    }
+
+
+    //
+    // Inner views View Setup
     private void setupRecyclerView() {
         Context context = mRecyclerView.getContext();
 
-        mNumberOfTopPaddingItems = (mNumberVisibleItems - 1) / 2;
-
-        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
+        final LinearLayoutManager linearLayoutManager = new LinearLayoutManager(context);
         mRecyclerView.setLayoutManager(linearLayoutManager);
         mAllVerticalScroll = 0;
-        final LinearLayoutManager dateLayoutManager = new LinearLayoutManager(context);
-        dateLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-        mRecyclerView.setLayoutManager(dateLayoutManager);
-        mRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
-            @Override
-            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
-                super.onScrollStateChanged(recyclerView, newState);
-                synchronized (this) {
-                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                        calculatePositionAndScroll();
-                    } else if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
-                        if (mValuePickerAdapter != null) {
-                            mValuePickerAdapter.setSelectedIndex(ValuePickerAdapter.POSITION_NONE);
-                        }
-                    }
-                }
-            }
-            @Override
-            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                super.onScrolled(recyclerView, dx, dy);
-                mAllVerticalScroll += dy;
-            }
-        });
+
+        mRecyclerView.addOnScrollListener(generateOnScrollListener());
         mValuePickerAdapter = new ValuePickerAdapter(context, getMin(), getMax());
         mRecyclerView.setAdapter(mValuePickerAdapter);
         mValuePickerAdapter.setSelectedIndex(0);
     }
 
-    private void viewRefresh() {
-        mBottomDivider.setBackgroundColor(mDividerColor);
-        mTopDivider.setBackgroundColor(mDividerColor);
-        setupViewSize();
-        mValuePickerAdapter.notifyDataSetChanged();
+
+    //
+    // Value calc helpers
+    private int recyclerViewHeight() {
+        return (mItemSmallHeight * (mNumberVisibleItems - 1)) + mItemBigHeight;
     }
 
+
+    //
+    // Layout params generators
+    private LayoutParams recyclerViewLayoutParams() {
+        LayoutParams recyclerLayoutParams = generateDefaultLayoutParams();
+        recyclerLayoutParams.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
+        recyclerLayoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        recyclerLayoutParams.height = recyclerViewHeight();
+        return recyclerLayoutParams;
+    }
+
+
+    //
+    // Computed properties
+    private int totalNumberOfPaddingItems() {
+        return mNumberVisibleItems - 1;
+    }
+
+    private int topNumberOfPAddingItems() {
+        return (int) Math.floor(totalNumberOfPaddingItems() / 2);
+    }
+
+    @NonNull
+    private TextView getTextView(Context context) {
+        TextView valueTextView = new TextView(context);
+        RecyclerView.LayoutParams params = mRecyclerView.getLayoutManager().generateDefaultLayoutParams();
+        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        int textViewPadding = ValuePickerHelper.textViewPadding;
+        valueTextView.setPadding(textViewPadding,textViewPadding,textViewPadding,textViewPadding);
+        valueTextView.setLayoutParams(params);
+        valueTextView.setGravity(Gravity.CENTER);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            valueTextView.setTextAlignment(TEXT_ALIGNMENT_CENTER);
+        }
+        return valueTextView;
+    }
+
+    private float scrollAmountPlusBigItemDiff() {
+        return mAllVerticalScroll + smallBigItemSizeDiff();
+    }
+
+    private float smallBigItemSizeDiff() {
+        return mItemBigHeight - mItemSmallHeight;
+    }
+
+    //
+    // Custom getters and setters
+    public void updateValues(List<String> values) {
+        this.mValuePickerAdapter = new ValuePickerAdapter(getContext(), values);
+        this.mRecyclerView.setAdapter(this.mValuePickerAdapter);
+        this.mValuePickerAdapter.setSelectedIndex(0);
+    }
+
+    public String getSelectedValue() {
+        return mValuePickerAdapter.getSelectedValue();
+    }
+
+    public int getSelectedIndex() {
+        return mValuePickerAdapter.selectedItemIndex;
+    }
+
+
+    //
+    // Getters and setters to properties
     public OnValueChangeListener getOnValueChangeListener() {
         return mOnValueChangeListener;
     }
 
     public void setOnValueChangeListener(OnValueChangeListener mOnValueChangeListener) {
         this.mOnValueChangeListener = mOnValueChangeListener;
-    }
-
-    public void updateValues(List<String> values) {
-        this.mValuePickerAdapter = new ValuePickerAdapter(getContext(), values);
-        this.mRecyclerView.setAdapter(this.mValuePickerAdapter);
-        this.mValuePickerAdapter.setSelectedIndex(0);
     }
 
     public int getMin() {
@@ -187,20 +210,20 @@ public class ValuePicker extends FrameLayout {
     }
 
     public float getTextSize() {
-        return mTextSize;
+        return mTextSizePx;
     }
 
-    public void setTextSize(float mTextSize) {
-        this.mTextSize = mTextSize;
+    public void setTextSize(int mTextSize) {
+        this.mTextSizePx = mTextSize;
         viewRefresh();
     }
 
-    public float getTextSizeSelected() {
-        return mTextSizeSelected;
+    public int getTextSizeSelected() {
+        return mTextSizeSelectedPx;
     }
 
-    public void setTextSizeSelected(float mTextSizeSelected) {
-        this.mTextSizeSelected = mTextSizeSelected;
+    public void setTextSizeSelected(int mTextSizeSelected) {
+        this.mTextSizeSelectedPx = mTextSizeSelected;
         viewRefresh();
     }
 
@@ -222,63 +245,73 @@ public class ValuePicker extends FrameLayout {
         viewRefresh();
     }
 
-    public String getSelectedValue() {
-        return mValuePickerAdapter.getSelectedValue();
-    }
 
-    public int getSelectedIndex() {
-        return mValuePickerAdapter.selectedItemIndex;
+    //
+    // On scroll changes Helpers
+    /**
+     * Helper
+     *
+     * @return  Recycler view OnScrollListener to select the center item of RecyclerView
+     */
+    private RecyclerView.OnScrollListener generateOnScrollListener() {
+        return new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                synchronized (this) {
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        calculatePositionAndScroll();
+                    } else if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                        if (mValuePickerAdapter != null) {
+                            mValuePickerAdapter.setSelectedIndex(ValuePickerAdapter.POSITION_NONE);
+                        }
+                    }
+                }
+            }
+            @Override
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                mAllVerticalScroll += dy;
+            }
+        };
     }
 
     private void calculatePositionAndScroll() {
-        int expectedPosition = Math.round(mAllVerticalScroll / mItemSmallHeight);
-        if (expectedPosition == -1) {
-            expectedPosition = 0;
-        } else if (expectedPosition >= mRecyclerView.getAdapter().getItemCount() - 2) {
-            expectedPosition = mRecyclerView.getAdapter().getItemCount() - 2;
-            mAllVerticalScroll = Math.round(expectedPosition * mItemSmallHeight);
+        int selectedItemScrollPosition = selectedItemForCurrentScroll();
+        if (getSelectedIndex() == selectedItemScrollPosition) {
+            return;
         }
-        scrollListToPosition(expectedPosition);
+        scrollListToPosition(selectedItemScrollPosition);
     }
 
-    private static int dp2px(Context context, int dp) {
-        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics()));
+    private int selectedItemForCurrentScroll() {
+        int selectedPosition = Math.round(scrollAmountPlusBigItemDiff() / mItemSmallHeight);
+        if (getSelectedIndex() == ValuePickerAdapter.POSITION_NONE) {
+            selectedPosition = Math.round(mAllVerticalScroll / mItemSmallHeight);
+        }
+        // Safe check to be a valid position because of rounds
+        return Math.min(mValuePickerAdapter.getValuesCount()-1, Math.max(0, selectedPosition));
     }
 
-    private void scrollListToPosition(int expectedPosition) {
-        float targetScrollPosDate = expectedPosition * mItemSmallHeight;
-        final float missingPxDate = targetScrollPosDate - mAllVerticalScroll;
+    private void scrollListToPosition(int selectedItemScrollPosition) {
+        float expectedScrollPosition = (selectedItemScrollPosition * mItemSmallHeight);
+//        if (getSelectedIndex() != ValuePickerAdapter.POSITION_NONE) {
+//            expectedScrollPosition -= smallBigItemSizeDiff()/2;
+//        }
+
+        final float missingPxDate = expectedScrollPosition - mAllVerticalScroll;
         if (missingPxDate != 0) {
             mRecyclerView.smoothScrollBy(0, (int) missingPxDate);
         }
-        mValuePickerAdapter.setSelectedAbsoluteIndex(Math.round(mAllVerticalScroll / mItemSmallHeight) + 1);
+        mValuePickerAdapter.setSelectedIndex(selectedItemScrollPosition);
     }
 
-    @NonNull
-    private static TextView getTextView(Context context, boolean isBig, float textSize, float textSizeSelected) {
-        TextView number = new TextView(context);
-        number.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        number.setGravity(Gravity.CENTER_HORIZONTAL);
-        if (isBig) {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textSizeSelected);
-        } else {
-            number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textSize);
-        }
 
-        return number;
-    }
-
-    @NonNull
-    private TextView getTextView(Context context, float textSize, float textSizeSelected) {
-        return getTextView(context, false, textSize, textSizeSelected);
-    }
-
-    public static int getTextViewHeight(Context context, boolean isBig, float textSize, float textSizeSelected) {
-        TextView textView = getTextView(context, isBig, textSize, textSizeSelected);
-        textView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        return textView.getMeasuredHeight();
-    }
-
+    //
+    // Custom Adapter
+    /**
+     * Recycler view Adapter
+     */
     private class ValuePickerAdapter extends RecyclerView.Adapter<ValuePickerAdapter.Holder> {
         private static final int VIEW_TYPE_PADDING = 0;
         private static final int VIEW_TYPE_ITEM = 1;
@@ -287,7 +320,6 @@ public class ValuePicker extends FrameLayout {
 
         private int selectedItemIndex = POSITION_NONE;
         private List<String> values;
-
 
         ValuePickerAdapter(Context context, int min, int max) {
             this.mContext = context;
@@ -304,13 +336,9 @@ public class ValuePicker extends FrameLayout {
         @Override
         public ValuePickerAdapter.Holder onCreateViewHolder(ViewGroup parent, int viewType) {
             if (viewType == VIEW_TYPE_ITEM) {
-                TextView number = getTextView(mContext, mTextSize, mTextSizeSelected);
-                return new ItemHolder(number);
+                return new ItemHolder(getTextView(mContext));
             } else {
-                View paddingView = new View(mContext);
-                RecyclerView.LayoutParams layoutParams = new RecyclerView.LayoutParams(dp2px(mContext, 1), mItemSmallHeight);
-                paddingView.setLayoutParams(layoutParams);
-                return new PaddingHolder(paddingView);
+                return new PaddingHolder(new View(mContext));
             }
         }
 
@@ -318,17 +346,15 @@ public class ValuePicker extends FrameLayout {
         public void onBindViewHolder(ValuePickerAdapter.Holder holder, int position) {
 
             if (holder instanceof PaddingHolder) {
-                PaddingHolder paddingHolder = (PaddingHolder) holder;
-                ViewGroup.LayoutParams params = paddingHolder.itemView.getLayoutParams();
-                if (position != 0) {
-                    params.height = (mItemSmallHeight + mItemBigHeight - mItemSmallHeight);
-                } else {
-                    params.height = mItemSmallHeight;
-                }
+                RecyclerView.LayoutParams layoutParams = mRecyclerView.getLayoutManager().generateDefaultLayoutParams();
+                layoutParams.width = ValuePickerHelper.dp2px(mContext, 1);
+                layoutParams.height = mItemSmallHeight;
+                ((PaddingHolder) holder).itemView.setLayoutParams(layoutParams);
             }
+
             if (holder instanceof ItemHolder) {
                 final ItemHolder itemHolder = (ItemHolder) holder;
-                int adjustedPosition = position - mNumberOfTopPaddingItems; // Adjusted position removes the 1st padding
+                int adjustedPosition = position - topNumberOfPAddingItems(); // Adjusted position removes the 1st padding
 
                 itemHolder.number.setText(values.get(adjustedPosition)); //minus padding view
 
@@ -336,12 +362,10 @@ public class ValuePicker extends FrameLayout {
                     if (mTextFadeColor) {
                         final ValueAnimator colorAnimation = ValueAnimator.ofObject(new ArgbEvaluator(), itemHolder.number.getCurrentTextColor(), mTextColorSelected);
                         colorAnimation.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-
                             @Override
                             public void onAnimationUpdate(ValueAnimator animator) {
                                 itemHolder.number.setTextColor((Integer) animator.getAnimatedValue());
                             }
-
                         });
                         colorAnimation.start();
                     } else {
@@ -349,39 +373,32 @@ public class ValuePicker extends FrameLayout {
                     }
 
                     if (mAnimateTextSize) {
-                        ValueAnimator textSizeAnimation = ValueAnimator.ofObject(new FloatEvaluator(), mTextSize, mTextSizeSelected);
+                        ValueAnimator textSizeAnimation = ValueAnimator.ofObject(new FloatEvaluator(), mTextSizePx, mTextSizeSelectedPx);
                         textSizeAnimation.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                             @Override
                             public void onAnimationUpdate(ValueAnimator animator) {
-                                itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (Float) animator.getAnimatedValue());
+                                ValuePickerHelper.setTextViewTextSize(itemHolder.number, ((Float) animator.getAnimatedValue()).intValue());
                             }
                         });
                         textSizeAnimation.start();
                     } else {
-                        itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mTextSizeSelected);
+                        ValuePickerHelper.setTextViewTextSize(itemHolder.number, mTextSizeSelectedPx);
                     }
-
+                    itemHolder.number.setTypeface(Typeface.DEFAULT_BOLD);
                 } else {
+                    itemHolder.number.setTypeface(Typeface.DEFAULT);
                     itemHolder.number.setTextColor(mTextColor);
-                    itemHolder.number.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mTextSize);
+                    ValuePickerHelper.setTextViewTextSize(itemHolder.number, mTextSizePx);
                 }
             }
         }
 
         @Override
         public int getItemViewType(int position) {
-            if (position < mNumberOfTopPaddingItems || position >= getItemCount() - mNumberOfTopPaddingItems) {
+            if (position < topNumberOfPAddingItems() || position >= (getItemCount() - topNumberOfPAddingItems())) {
                 return VIEW_TYPE_PADDING;
             }
             return VIEW_TYPE_ITEM;
-        }
-
-        void setSelectedAbsoluteIndex(int absoluteIndex) {
-            if (getItemViewType(absoluteIndex) == VIEW_TYPE_PADDING) {
-                setSelectedIndex(POSITION_NONE);
-                return;
-            }
-            setSelectedIndex(absoluteIndex - mNumberOfTopPaddingItems); // Adjust to position index
         }
 
         void setSelectedIndex(int selectedIndex) {
@@ -392,7 +409,6 @@ public class ValuePicker extends FrameLayout {
                 this.selectedItemIndex = selectedIndex;
                 notifyDataSetChanged();
             }
-
         }
 
         String getSelectedValue() {
@@ -404,7 +420,11 @@ public class ValuePicker extends FrameLayout {
 
         @Override
         public int getItemCount() {
-            return values.size() + mNumberOfTopPaddingItems*2; // calculate number of items plus 2 padding
+            return  getValuesCount() + totalNumberOfPaddingItems();
+        }
+
+        int getValuesCount() {
+            return values.size();
         }
 
         private class PaddingHolder extends Holder {
@@ -429,4 +449,37 @@ public class ValuePicker extends FrameLayout {
         }
     }
 
+    //
+    // Helpers to Value picker
+    private static class ValuePickerHelper {
+        public static int textViewPadding = 10;
+
+        private static void setTextViewTextSize(TextView textView, int size) {
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, size);
+        }
+
+        private static int dp2px(Context context, int dp) {
+            return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, context.getResources().getDisplayMetrics()));
+        }
+
+        private static int getTextViewHeight(Context context, boolean isSelectedTextView, int textSizePx, int textSizeSelectedPx) {
+            TextView textView = new TextView(context);
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            textView.setLayoutParams(params);
+            textView.setPadding(textViewPadding,textViewPadding,textViewPadding,textViewPadding);
+            textView.setGravity(Gravity.CENTER);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                textView.setTextAlignment(TEXT_ALIGNMENT_CENTER);
+            }
+            if (isSelectedTextView) {
+                textView.setTypeface(Typeface.DEFAULT_BOLD);
+                setTextViewTextSize(textView, textSizeSelectedPx);
+            } else {
+                textView.setTypeface(Typeface.DEFAULT);
+                setTextViewTextSize(textView, textSizePx);
+            }
+            textView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+            return textView.getMeasuredHeight();
+        }
+    }
 }
