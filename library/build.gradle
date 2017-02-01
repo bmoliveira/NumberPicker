@@ -1,5 +1,6 @@
 apply plugin: 'com.android.library'
-apply plugin: 'com.novoda.bintray-release' //must be applied after your artifact generating plugin (eg. java / com.android.library)
+//apply plugin: 'com.novoda.bintray-release' //must be applied after your artifact generating plugin (eg. java / com.android.library)
+apply plugin: 'com.github.dcendents.android-maven' // jitpack.io
 
 buildscript {
     repositories {
@@ -10,7 +11,7 @@ buildscript {
     }
 }
 
-group='com.github.bmoliveira'
+group='com.github.bmoliveira' // jitpack.io
 
 android {
     compileSdkVersion 25
@@ -34,13 +35,13 @@ android {
     }
 }
 
-publish {
-    userOrg = 'borealisbiz'
-    groupId = 'biz.borealis.numberpicker'
-    artifactId = 'NumberPicker'
-    publishVersion = '1.1.2'
-    website = 'https://github.com/BorealisBiz/NumberPicker'
-}
+//publish {
+//    userOrg = 'borealisbiz'
+//    groupId = 'biz.borealis.numberpicker'
+//    artifactId = 'NumberPicker'
+//    publishVersion = '1.1.2'
+//    website = 'https://github.com/BorealisBiz/NumberPicker'
+//}
 
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
